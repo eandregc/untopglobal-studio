@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel de publicación</title>
+  <link rel="stylesheet" href="estilos.css">
+  <script src="config.js"></script>
+</head>
+<body>
+  <header>
+    <a class="marca" href="index.html">unTopGlobal Studio</a>
+    <nav>
+      <a href="privacidad.html">Política de privacidad / Privacy Policy</a>
+      <a href="terminos.html">Términos del servicio / Terms of Service</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Publicar video</h1>
+
+    <div class="tarjeta">
+      <label for="clave">Clave del panel</label>
+      <input id="clave" type="password" autocomplete="current-password">
+      <label for="cuenta">Cuenta</label>
+      <select id="cuenta">
+        <option value="main">unTopGlobal</option>
+        <option value="meta">unTopGlobalMeta</option>
+      </select>
+      <button id="cargar">Cargar</button>
+      <button id="vincular" class="secundario">Vincular cuenta</button>
+      <p id="mensaje" class="pequeno"></p>
+    </div>
+
+    <div id="formulario" class="oculto">
+      <div class="tarjeta">
+        <div class="creador">
+          <img id="avatar" alt="">
+          <div>
+            <div class="pequeno">Vas a publicar en</div>
+            <strong id="apodo"></strong> <span id="usuario" class="pequeno"></span>
+          </div>
+        </div>
+        <p id="noPuede" class="pequeno oculto"></p>
+      </div>
+
+      <div class="tarjeta">
+        <iframe id="vista" class="vista" allow="autoplay" title="Vista previa"></iframe>
+        <p id="videoInfo" class="pequeno"></p>
+        <label for="texto">Texto (pie de foto y hashtags)</label>
+        <textarea id="texto" maxlength="2200"></textarea>
+
+        <label for="privacidad">Quién puede ver este video</label>
+        <select id="privacidad"><option value="" selected disabled>Elige una opción</option></select>
+
+        <label>Permitir a los usuarios</label>
+        <div class="fila"><input type="checkbox" id="comentarios"><label for="comentarios">Comentarios</label></div>
+        <div class="fila"><input type="checkbox" id="duo"><label for="duo">Dúo</label></div>
+        <div class="fila"><input type="checkbox" id="stitch"><label for="stitch">Stitch</label></div>
+
+        <label>Etiquetas</label>
+        <div class="fila"><input type="checkbox" id="ia"><label for="ia">Contenido generado por IA</label></div>
+
+        <label>Divulgación del contenido</label>
+        <div class="fila"><input type="checkbox" id="comercial"><label for="comercial">Este video promociona una marca, producto o servicio</label></div>
+        <div id="opcionesComercial" class="oculto">
+          <div class="fila"><input type="checkbox" id="marcaPropia"><label for="marcaPropia">Tu marca</label></div>
+          <div class="fila"><input type="checkbox" id="contenidoMarca"><label for="contenidoMarca">Contenido de marca</label></div>
+          <p id="avisoComercial" class="pequeno"></p>
+        </div>
+
+        <p id="declaracion" class="pequeno"></p>
+        <div class="fila"><input type="checkbox" id="musica"><label for="musica">Estoy de acuerdo</label></div>
+
+        <button id="publicar" disabled>Publicar</button>
+        <button id="guardar" class="secundario" disabled>Guardar como ajustes de publicación automática</button>
+        <p id="resultado" class="pequeno"></p>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <a href="privacidad.html">Política de privacidad / Privacy Policy</a> ·
+    <a href="terminos.html">Términos del servicio / Terms of Service</a>
+  </footer>
+
+  <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      var ETIQUETAS = {
+        PUBLIC_TO_EVERYONE: "Todos",
+        MUTUAL_FOLLOW_FRIENDS: "Amigos (seguidores mutuos)",
+        FOLLOWER_OF_CREATOR: "Seguidores",
+        SELF_ONLY: "Solo yo"
+      };
+      var MUSICA = '<a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Declaración de uso de música</a>';
+      var MARCA = '<a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noopener">Política de contenido de marca</a>';
+      var datos = null;
+
+      try { $("clave").value = localStorage.getItem("panelClave") || ""; } catch (e) {}
+
+      function api(params) {
+        var q = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&");
+        return fetch(window.APPS_SCRIPT_URL + "?" + q).then(function (r) { return r.json(); });
+      }
+
+      function base(extra) {
+        var o = { k: $("clave").value, cuenta: $("cuenta").value };
+        for (var k in extra) o[k] = extra[k];
+        return o;
+      }
+
+      function marcados() {
+        return {
+          privacidad: $("privacidad").value,
+          comentarios: $("comentarios").checked ? 1 : 0,
+          duo: $("duo").checked ? 1 : 0,
+          stitch: $("stitch").checked ? 1 : 0,
+          ia: $("ia").checked ? 1 : 0,
+          comercial: $("comercial").checked ? 1 : 0,
+          marcaPropia: $("marcaPropia").checked ? 1 : 0,
+          contenidoMarca: $("contenidoMarca").checked ? 1 : 0,
+          musica: $("musica").checked ? 1 : 0
+        };
+      }
+
+      // Reglas de la divulgación comercial y del botón de publicar.
+      function actualizar() {
+        var comercial = $("comercial").checked;
+        var marca = $("contenidoMarca").checked;
+        var propia = $("marcaPropia").checked;
+        $("opcionesComercial").classList.toggle("oculto", !comercial);
+
+        var soloYo = $("privacidad").querySelector('option[value="SELF_ONLY"]');
+        if (soloYo) soloYo.disabled = comercial && marca;
+        if (comercial && marca && $("privacidad").value === "SELF_ONLY") $("privacidad").value = "";
+
+        var aviso = "";
+        if (comercial && marca) aviso = "Tu video se etiquetará como «Colaboración pagada». El contenido de marca no puede ser privado.";
+        else if (comercial && propia) aviso = "Tu video se etiquetará como «Contenido promocional».";
+        else if (comercial) aviso = "Elige «Tu marca», «Contenido de marca» o ambas para poder publicar.";
+        $("avisoComercial").textContent = aviso;
+
+        $("declaracion").innerHTML = "Al publicar, aceptas la " + (comercial && marca ? MARCA + " y la " : "") + MUSICA + ".";
+
+        var puede = !!datos && !!datos.creador && !!datos.video && !!$("privacidad").value && $("musica").checked && (!comercial || marca || propia);
+        $("publicar").disabled = !puede;
+        $("guardar").disabled = !(datos && datos.creador && $("privacidad").value && $("musica").checked && !comercial);
+        $("publicar").title = comercial && !marca && !propia ? "Elige al menos una opción de divulgación" : "";
+      }
+
+      function pintar(d) {
+        datos = d;
+        $("formulario").classList.remove("oculto");
+        var c = d.creador || {};
+        $("avatar").src = c.creator_avatar_url || "";
+        $("apodo").textContent = c.creator_nickname || (d.autorizada ? "(sin permiso de publicación: vuelve a vincular)" : "(cuenta sin vincular)");
+        $("usuario").textContent = c.creator_username ? "@" + c.creator_username : "";
+        $("noPuede").classList.toggle("oculto", !d.creadorError);
+        $("noPuede").textContent = d.creadorError ? "Esta cuenta no puede publicar ahora (" + d.creadorError + "). Inténtalo más tarde." : "";
+
+        var sel = $("privacidad");
+        sel.innerHTML = '<option value="" selected disabled>Elige una opción</option>';
+        (c.privacy_level_options || []).forEach(function (v) {
+          var o = document.createElement("option");
+          o.value = v; o.textContent = ETIQUETAS[v] || v; sel.appendChild(o);
+        });
+
+        [["comentarios", c.comment_disabled], ["duo", c.duet_disabled], ["stitch", c.stitch_disabled]].forEach(function (x) {
+          $(x[0]).checked = false;
+          $(x[0]).disabled = x[1] === true;
+          $(x[0]).parentNode.title = x[1] === true ? "Desactivado en los ajustes de tu cuenta" : "";
+        });
+
+        $("ia").checked = d.etiquetaIASugerida === true;
+        $("comercial").checked = false; $("marcaPropia").checked = false; $("contenidoMarca").checked = false; $("musica").checked = false;
+
+        if (d.video) {
+          $("vista").src = d.video.vistaPrevia;
+          $("texto").value = d.video.texto;
+          var max = c.max_video_post_duration_sec ? " · duración máxima permitida: " + c.max_video_post_duration_sec + " s" : "";
+          $("videoInfo").textContent = d.video.nombre + " · " + d.video.mb + " MB" + max;
+        } else {
+          $("vista").removeAttribute("src");
+          $("texto").value = "";
+          $("videoInfo").textContent = "No hay video pendiente para esta cuenta.";
+        }
+        actualizar();
+      }
+
+      $("cargar").onclick = function () {
+        try { localStorage.setItem("panelClave", $("clave").value); } catch (e) {}
+        $("mensaje").textContent = "Cargando…";
+        api(base({ api: "creador" })).then(function (d) {
+          $("mensaje").textContent = d.ok ? "" : d.error;
+          if (d.ok) pintar(d);
+        }).catch(function (e) { $("mensaje").textContent = String(e); });
+      };
+
+      $("vincular").onclick = function () {
+        api(base({ api: "autorizar" })).then(function (d) {
+          if (d.ok) window.location.href = d.url; else $("mensaje").textContent = d.error;
+        });
+      };
+
+      ["privacidad", "comercial", "marcaPropia", "contenidoMarca", "musica"].forEach(function (id) { $(id).onchange = actualizar; });
+
+      $("publicar").onclick = function () {
+        $("publicar").disabled = true;
+        $("resultado").textContent = "Subiendo el video…";
+        var p = base(marcados()); p.api = "publicar"; p.texto = $("texto").value; p.clave = datos.video.clave;
+        api(p).then(function (d) {
+          if (!d.ok) { $("resultado").textContent = d.error; actualizar(); return; }
+          $("resultado").textContent = d.mensaje;
+          var vueltas = 0;
+          var t = setInterval(function () {
+            api(base({ api: "estado", publishId: d.publishId })).then(function (s) {
+              if (s.estado) $("resultado").textContent = d.mensaje + " Estado: " + s.estado + (s.motivo ? " (" + s.motivo + ")" : "");
+              if (s.estado === "PUBLISH_COMPLETE" || s.estado === "FAILED" || ++vueltas > 18) clearInterval(t);
+            });
+          }, 10000);
+        }).catch(function (e) { $("resultado").textContent = String(e); actualizar(); });
+      };
+
+      $("guardar").onclick = function () {
+        var p = base(marcados()); p.api = "consentir";
+        api(p).then(function (d) {
+          $("resultado").textContent = d.ok ? "Ajustes guardados: los próximos videos de esta cuenta se publicarán con ellos." : d.error;
+        });
+      };
+    })();
+  </script>
+</body>
+</html>

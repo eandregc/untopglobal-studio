@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vinculando cuenta</title>
+  <link rel="stylesheet" href="estilos.css">
+  <script src="config.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Vinculando tu cuenta…</h1>
+    <p id="estado">Un momento.</p>
+  </main>
+  <script>
+    // Redirect URI registrado en la app: esta página. Reenvía code/state/error
+    // al Web App de Apps Script, que canjea el código y guarda el token.
+    (function () {
+      var q = window.location.search.replace(/^\?/, "");
+      if (!q) {
+        document.getElementById("estado").textContent = "No llegó ningún código de autorización.";
+        return;
+      }
+      window.location.replace(window.APPS_SCRIPT_URL + "?api=oauth&" + q);
+    })();
+  </script>
+</body>
+</html>
